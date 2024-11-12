@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { combinationsLength, combinationsOf, systems } from "./domain";
 
 function App() {
@@ -13,20 +13,6 @@ function App() {
       variant: "correct",
     })),
   });
-
-  useEffect(() => {
-    if (selectedSystem[1] === bets.length) {
-      return;
-    }
-    setBets((old) => ({
-      ...old,
-      odds: new Array(selectedSystem[1]).fill(null).map((_, index) => ({
-        index: index + 1,
-        coefficient: 2,
-        variant: "correct",
-      })),
-    }));
-  }, [selectedSystem, setBets]);
 
   function changeCoefficient(index, coefficient) {
     setBets((old) => ({
@@ -49,7 +35,8 @@ function App() {
       odds: old.odds.map((bet) => {
         if (bet.index === index) {
           return {
-            ...bet,
+            index: bet.index,
+            coefficient: bet.coefficient,
             variant: variant,
           };
         }
@@ -65,6 +52,8 @@ function App() {
     }));
   }
 
+  const combinations = combinationsOf(bets.odds, selectedSystem[0]);
+
   return (
     <div className="w-screen h-screen flex items-center flex-col gap-[16px]">
       <header className="text-[20px] font-bold">System Bets Calculator</header>
@@ -74,11 +63,21 @@ function App() {
             <span>System</span>
             <select
               onChange={(e) => {
-                showCombinations && setShowCombinations(false);
                 const values = e.currentTarget.value.split(",");
                 const k = Number(values[0]);
                 const n = Number(values[1]);
                 setSelectedSystem([k, n]);
+                if (n === bets.odds.length) {
+                  return;
+                }
+                setBets((old) => ({
+                  ...old,
+                  odds: new Array(n).fill(null).map((_, index) => ({
+                    index: index + 1,
+                    coefficient: 2,
+                    variant: "correct",
+                  })),
+                }));
               }}
               className="outline-none rounded-md text-[16px]"
             >
@@ -92,7 +91,7 @@ function App() {
 
           <p>
             A system {selectedSystem[0]} from {selectedSystem[1]} contains{" "}
-            {combinationsLength(selectedSystem)} combinations
+            <b>{combinationsLength(selectedSystem)}</b> combinations
           </p>
         </div>
 
@@ -102,7 +101,6 @@ function App() {
             <input
               value={bets.totalStake}
               onChange={(e) => {
-                showCombinations && setShowCombinations(false);
                 changeTotalStake(e.currentTarget.value);
               }}
               className="w-[100px] bg-gray-200 px-[8px] rounded-[24px] outline-none"
@@ -178,18 +176,14 @@ function App() {
                 </tr>
               </thead>
               <tbody>
-                {combinationsOf(
-                  bets.odds.map((odd) => odd.coefficient),
-                  selectedSystem[0],
-                ).map((combination, i) => {
-                  const bet = bets.odds.find((b) => b.index === i + 1);
+                {combinations.map((combination, i) => {
                   const stake =
                     bets.totalStake / combinationsLength(selectedSystem);
 
                   return (
                     <Row
                       key={i}
-                      bet={bet}
+                      index={i + 1}
                       combination={combination}
                       stake={stake}
                     />
@@ -215,20 +209,8 @@ function App() {
   );
 }
 
-function Row({ index, stake, combination, bet }) {
-  const combinedOdds = combination.reduce((acc, coeff) => {
-    if (bet) {
-      switch (bet.variant) {
-        case "correct":
-          return acc * coeff;
-        case "incorrect":
-          return acc * 0;
-        case "void":
-          return acc * 1;
-      }
-    }
-    return acc;
-  }, 1);
+function Row({ index, stake, combination }) {
+  const combinedOdds = combination.reduce((acc, c) => acc * c.coefficient, 1);
   const winnings = stake * combinedOdds;
 
   return (
@@ -240,10 +222,12 @@ function Row({ index, stake, combination, bet }) {
             key={index}
             className={clsx(
               index !== 0 && "border-l border-black",
+              c.variant === "incorrect" && "text-red-400",
+              c.variant === "void" && "text-yellow-400",
               "w-full text-center",
             )}
           >
-            {Number(c).toFixed(2)}
+            {c.coefficient.toFixed(2)}
           </div>
         ))}
       </td>
